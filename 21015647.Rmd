@@ -1,0 +1,807 @@
+---
+title: "Jose Mendoza MAT022 Coursework 2020-2021"
+author: "21015647"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  pdf_document:
+    toc: yes
+  bookdown::pdf_document2:
+    citation_package: natbib
+    df_print: kable
+    extra_dependencies:
+      caption: labelfont={bf}
+    fig_caption: yes
+    highlight: haddock
+    keep_tex: yes
+    number_sections: yes
+    toc: yes
+biblio-style: apalike
+email: MendozaJimenezJC@cardiff.ac.uk
+fontfamily: times
+fontsize: 11pt
+geometry: margin=1in
+link-citations: yes
+bibliography: refs.bib
+abstract: This is a coursework report corresponding to the module MAT022 during the year 2020 - 2021
+---
+
+<!-- set knitr options here -->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r SET WORKING DIRECTORY, include=FALSE}
+setwd('C:\\Users\\Jose Carlos\\R_notes\\MAT022\\R_MARKDOWN')
+```
+
+```{r SET WORKING DIRECTORY TO SOURCE FILE LOCATION, echo=FALSE}
+#setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+```
+
+
+```{r LIBRARIES, include=FALSE}
+library('readr')
+library('dplyr')
+library('tidyr')
+library('car')
+library('ggplot2')
+library('ggpubr')
+library('modelr')
+library('rstudioapi')
+```
+
+```{r NBA DF LOAD, include=FALSE}
+nba_df <- read_csv('nbadata.csv')
+
+```
+
+```{r DISTINCT PLAYERS, include=FALSE}
+
+nba_players <- nba_df %>% distinct(PLAYER_NAME) %>% arrange(PLAYER_NAME)
+
+```
+
+
+
+<!-- main body starts here -->
+
+
+# Introduction {#intro}
+The following analysis is an attempt to aproach the provided dataset using as many different methods taught in the module Foundations of Statistical Analysis and Data Science (MAT022).
+Even if this may not be the best approach to study this set of data when in a proffesional environment, the scope of this work is to make use of the tools learnt during the course.
+
+Due to the limitations in time and space, the report will try to obtain significance of the results obtained and make generalizations, in detriment of an strict approach of this data.
+
+The libraries used for this work and required to run the R-Markdown document are - readr, dplyr, tidyr, car, ggplot2, ggpubr and modelr. rstudioapi is used to set working directory to source file location.
+
+
+# Background {#sec:background}
+As this dataset as been approached without any knowledge of basketball, most of the assumptions and considerations may be called naive from a sports proffesional's point of view.
+
+The approach that was made when dealing with the data had the intention to cover the datset as a whole, rather at looking at individual parameters relationship, whose importance we may don't understand.
+For this reason, the report focusses on the player's analysis and frequently we group and summarise data to obtain player's stats (players accuracy, average shot distance, etc.). An example of this can be found in the section (Player's Accuracy). The values from this "fabricated"" dataset are statistcs and not parameters as the data has been summarised. However we will later use these values as "attributes", in a non-strict way, to make the data "understandable" for somebody without basketball knowledge.
+
+Lastly, need to mention that a part of this work is conditional. The R-Markdown document performs sampling during the execution of the code. For this reason, the output of some of the tests are conditional (i.e. based on resulted p-values) and the results from the report will differ when compared with individual R-Markdown file executions.
+
+
+
+
+
+# 1. Whole dataset exploration 
+
+Initially we look at the dataset focussing on the most important parameter of every data entry, the result (whether the shot was made or missed).
+
+<!-- TEST 01 BERNOUILLI EXPERIMENT -->
+
+## Bernouilli experiment describing a shot
+
+The primary objective of basketball is shooting a ball through the defender's hoop. The result will be either positive or negative (made or missed) and therefore can be considered as a Bernouilli experiment, where p is the probability of making a shot.
+
+We will use a frequentist approach to infere the probability of success, from a sample of 100 shots.
+
+Let $X_1,\ldots,X_n$ be the random sample shots from the $\text{Bernoulli}(p)$ distribution, as:  
+$$
+\sum_{i=1}^{n}X_i \sim\text{Binomial}(n,p).
+$$ 
+
+Where $p$ is the empirical probability of making a shot obtained from a frequentist approach:
+
+```{r message=FALSE, warning=FALSE}
+
+nba_sample_1 <- nba_df[sample(nrow(nba_df), 100), ]
+
+all_made_1 <- nrow(nba_sample_1 %>% filter(SHOT_RESULT == 'made'))
+all_missed_1 <- nrow(nba_sample_1 %>% filter(SHOT_RESULT == 'missed'))
+all_shots_1 <- nrow(nba_sample_1)
+
+p_made_1 <- all_made_1 / all_shots_1
+
+```
+The sampled probability of making a shot is:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+noquote(paste(p_made_1*100,'%'))
+```
+
+This can be represented as a binomial distribution, where we can obtain the probality of making $X$ number of shots:
+
+```{r echo=FALSE, fig.height=4, fig.width=7, message=FALSE, warning=FALSE}
+
+options(width = 60)
+
+xvals_1 <- 0:all_shots_1
+yvals_1 <- dbinom(xvals_1, size=all_shots_1, prob=p_made_1) 
+
+options(repr.plot.width=4, repr.plot.height=1)
+par(mfrow=c(1,2))
+
+plot(xvals_1, yvals_1, type='h', xlab='Number of shots', ylab='Probability of making X shots', main=sprintf('PDF of B(%i,%.2f)',all_shots_1,p_made_1), cex.lab=0.75, cex.axis=0.75, cex.main=0.75, cex.sub=0.75)
+points(xvals_1, yvals_1, pch=19)
+
+# plot cdf
+deltax <- 0.01                 
+xvals_1_cdf <- seq(-1, all_shots_1+1, deltax)
+yvals_1_cdf <- pbinom(xvals_1_cdf, size=all_shots_1, prob=p_made_1)
+plot(xvals_1_cdf, yvals_1_cdf, type='l', xlab='Number of shots', ylab='C. density function of making X shots', main=sprintf('CDF of B(%i,%.2f)',all_shots_1,p_made_1), cex.lab=0.75, cex.axis=0.75, cex.main=0.75, cex.sub=0.75) 
+
+```
+
+We create a confidence interval for this sample using the normal approximation, as the number of samples is sufficiently large.
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+
+alpha_1 <- 0.05
+
+z_lower_1 <- qnorm(alpha_1/2, 0, 1)
+z_upper_1 <- qnorm(1-alpha_1/2, 0, 1)
+
+xz_lower_1 <- p_made_1 + z_lower_1*sqrt(p_made_1*(1-p_made_1)/all_shots_1)
+xz_upper_1 <- p_made_1 + z_upper_1*sqrt(p_made_1*(1-p_made_1)/all_shots_1)
+
+```
+
+The confidence intervals:
+```{r echo=FALSE, fig.height=4, fig.width=7, message=FALSE, warning=FALSE}
+ci <- c(xz_lower_1, xz_upper_1)
+names(ci)<-c('Lower','Upper')
+print(ci)
+```
+
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+plot(xvals_1, yvals_1, type='h', xlab='Number of shots', ylab='Probability of making X shots', main=sprintf('PDF of B(%i,%.2f)',all_shots_1,p_made_1), cex.lab=0.75, cex.axis=0.75, cex.main=0.75, cex.sub=0.75)
+points(xvals_1, yvals_1, pch=19)
+
+points(xvals_1, yvals_1, pch=19)
+abline(v=ci[1]*100, lwd=1, col='red')
+abline(v=ci[2]*100, lwd=1, col='red')
+
+```
+
+
+
+<!-- TEST 2 - BINOMIAL TEST DOUBLE VS TRIPLE SHOTS -->
+
+## Double vs Triple shot - equality of proportions
+
+
+We are repeating the above experiment, but this time we are taking two differentiaded samples: Double and Triple shots. We calculate the binomial distributions for each sample and perform an equality of proportions test to see whether this fact affects the probability of making a shot, depending on whether the samples are found to be statistically different.
+
+```{r echo=FALSE, fig.height=4.5, fig.width=7, message=FALSE, warning=FALSE}
+
+noquote('Equality of proportions test')
+options(width = 60)
+
+sample_size_2 <- 50
+
+nba_sample_double_2 <- nba_df[sample(nrow(nba_df %>% filter (PTS_TYPE == 2)), sample_size_2), replace = FALSE ]
+nba_sample_triple_2 <- nba_df[sample(nrow(nba_df %>% filter (PTS_TYPE == 3)), sample_size_2), replace = FALSE ]
+
+p_made_double_2 <- nrow(nba_sample_double_2 %>% filter (SHOT_RESULT == 'made')) / sample_size_2
+p_made_triple_2 <- nrow(nba_sample_triple_2 %>% filter (SHOT_RESULT == 'made')) / sample_size_2
+
+xvals_2 <- 0:sample_size_2
+yvals_double_2 <- dbinom(xvals_2, size=sample_size_2, prob=p_made_double_2) 
+yvals_triple_2 <- dbinom(xvals_2, size=sample_size_2, prob=p_made_triple_2) 
+
+options(repr.plot.width=12, repr.plot.height=3)
+#par(mfrow=c(1,2))
+
+plot(xvals_2, yvals_double_2, type='h', col = 'blue', xlab='Number of shots', ylab='Probability of making X shots', main=sprintf('Binomial distributions of double and triple shots',sample_size_2,p_made_double_2), cex.lab=0.75, cex.axis=0.75, cex.main=0.75, cex.sub=0.75)
+points(xvals_2, yvals_double_2, pch=19)
+
+# Left the code this way to separate the graphs chaning points by plot
+points(xvals_2, yvals_triple_2, type='h', col = 'red', xlab='Number of triple shots', ylab='Probability of making X shots', main=sprintf('Triple shot PDF of B(%i,%.2f)',sample_size_2,p_made_triple_2))
+points(xvals_2, yvals_triple_2, pch=10)
+
+legend("right", legend = c("Double shot", "Triple shot"), col = c('blue', 'red') , pch = c(19,10), bty = "n", pt.cex = 2, cex = 1.2, text.col = "black", horiz = F , inset = c(0.05, 0.1))
+
+```
+
+Performing a 2-sample test for equality of proportions:
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+nt <- c(50, 50)
+pr_true <- c(p_made_double_2, p_made_triple_2)
+
+obs <- c(rbinom(1, nt[1], pr_true[1]), rbinom(1, nt[2], pr_true[2]))
+
+noquote(c('Number of samples (double and triple)   =', nt))
+noquote(c('Empirical probabilities (double and triple)   =', pr_true))
+noquote(c('Observations =', obs))
+
+pr_null <- p_made_double_2 
+alpha <- 0.05
+
+test_2 <- prop.test(obs, n=nt)
+
+```
+
+The obtained p-value and confidence intervals:
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+options(width = 60)
+
+noquote(paste('Lower confidence interval limit: ', test_2$conf.int[1]))
+noquote(paste('Higher confidence interval limit: ', test_2$conf.int[2]))
+noquote(paste('P-Value: ', test_2$p.value))
+
+
+if (test_2$p.value > alpha) {
+noquote('We retain the Null hypothesis')
+noquote('The probability of making a shot is the same.')
+} else {
+noquote('We reject the Null hypothesis.')
+noquote('There is a difference between double and triple shots.')
+}
+
+```
+
+As the difference between the two probabilities lies within the confidence region and the p-value is larger than 0.05, we retain the null hypothesis that the difference seen in the distribution graph is due to sampling error.
+
+
+
+<!-- TEST 3 - PLAYER'S ACCURACY -->
+
+
+# 2. Player's analysis
+
+
+
+
+## Players accuracy: Empirical probabily of making a shot
+
+
+The following test may be controversial but could be a way to "label" or "rank" players, and giving an indication of player performance for the dataset.
+
+We will compute the empirical probability of making a shot for each player, using a frequentist approach, and will call this statistic his "accuracy". As we are using the whole dataset to obtain this value, we will make the assumption that this is the true probality, to leave aside the sampling error considerations discussed above.
+
+We will use the accuracy of the players as a ranking attribute that will be later used for more inferential analysis.
+
+```{r echo=FALSE, fig.height=4, fig.width=8, message=FALSE, warning=FALSE}
+options(width = 60)
+
+players_accuracy <- nba_df %>%
+  group_by(PLAYER_NAME, SHOT_RESULT) %>%
+  summarise(count = n()) %>%
+  spread(SHOT_RESULT, count) %>%
+  mutate(accuracy = made/(made+missed)) %>%
+  arrange(desc(accuracy))
+
+options(repr.plot.width=12, repr.plot.height=3)
+par(mfrow=c(1,2))
+
+accuracy_series <- players_accuracy$accuracy
+
+qqnorm(accuracy_series, main = 'Accuracy normality test', cex.lab=0.75, cex.axis=0.75, cex.main=0.75, cex.sub=0.75)
+qqline(accuracy_series, col='red',lwd=3)
+
+boxplot(accuracy_series, horizontal=TRUE, col='deeppink', main = 'Boxplot - player accuracy', xlab = 'Quantile distribution', cex.lab=0.75, cex.axis=0.75, cex.main=0.75, cex.sub=0.75)
+
+first_quartile <- quantile(accuracy_series, 0.25)
+third_quartile <- quantile(accuracy_series, 0.75)
+iqr <- quantile(accuracy_series, 0.75) - quantile(accuracy_series, 0.25)
+
+summary(players_accuracy)
+
+```
+
+In terms of the qq-plot, we see that the player's accuracy is only normally distributed on the lower and central quartiles, what reveals that in the dataset there are some players "outperforming" above the rest.
+
+We can confirm this hypothesis when we look at the boxplot graph, where the outliers above the distribution break. We therefore conclude that the actual distribution is "right tailed" to include the outperforming players.
+
+The quartiles of the distribution, and interquartile range:
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+sprintf('1st quartile = %.3f',as.double(first_quartile))
+sprintf('3rd quartile = %.3f',as.double(third_quartile))
+sprintf('IQR = %.3f',as.double(iqr))
+```
+
+
+
+
+<!-- TEST 4 - EXACT BINOMIAL TEST -->
+
+## Exact binomial test to study playing Home/Away effect
+
+Earlier we obtained the accuracy for each player, which we are using a way of measuring the probability of making a shot. During the following test, we will perform an experiment in which we will select a player, and obtain its accuracy.
+
+In this test, the null Hypothesis is that the player will make the same percentage of shots playing home or away.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+options(width = 60)
+
+alpha_4 <- 0.05
+
+test_04_player <- sample(nba_players$PLAYER_NAME, 1)
+test_04_player_accuracy <- players_accuracy$accuracy[players_accuracy$PLAYER_NAME == test_04_player]
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+noquote(paste('The player randomly selected is: ', test_04_player))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+noquote(paste('His accuracy during the 2014 season was:',round(test_04_player_accuracy*100),'%'))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+test_04_sample_size <- 100
+
+test_04_shots <- nba_df %>% filter (PLAYER_NAME == test_04_player, LOCATION == 'A')
+test_04_sample <- test_04_shots[sample(nrow(test_04_shots), test_04_sample_size), ]
+
+test_04_successes <- nrow(test_04_sample %>% filter(SHOT_RESULT == 'made'))
+test_04_misses <- nrow(test_04_sample %>% filter(SHOT_RESULT == 'missed'))
+
+noquote(paste('From a random sample of ', test_04_sample_size, ' shots while playing away, he made: ',test_04_successes,'shots.'))
+
+test_04_result <- binom.test(c(test_04_successes, test_04_misses), p=test_04_player_accuracy, alternative='less', conf.level=0.95)
+
+if (test_04_result$p.value > alpha_4) {
+test_04_decision <- 'RETAIN'
+} else {
+test_04_decision <- 'REJECT'
+}
+
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+cat(paste('After performing an Exact Binomial Test, the p-value obtained was ', test_04_result$p.value, sep = '\n'))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+cat(paste(' and therefore we ',test_04_decision,' the Null Hypothesis that the performs the same playing home or away.', sep ='\n'))
+```
+
+
+
+
+
+
+## Comparison between players using a t-test
+
+One interesting metric for a player is the amount of made shots he will perform during the season. If you are a coach and are interesting in getting a new player for the next season, you would be interested in this metric.
+
+During the following test, we will select two random players and will calculate the number of made shots per game. We will perform a t-test under a confidence region of 95% to investigate whether there is a significant difference between both players. The Null Hypothesis is that there is no difference between the two players.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+options(width = 60)
+
+alpha_42 <- 0.05
+
+players_42 <- sample(nba_players$PLAYER_NAME, 2, replace = FALSE)
+
+noquote(paste('The two randomly selected players are: ', players_42[1], 'and', players_42[2]))
+
+player_1_ppg_42 <- nba_df %>%
+  filter(PLAYER_NAME == players_42[1], SHOT_RESULT == 'made') %>%
+  group_by(GAME_ID) %>%
+  summarise( points_per_game = n())
+
+player_2_ppg_42 <- nba_df %>%
+  filter(PLAYER_NAME == players_42[2], SHOT_RESULT == 'made') %>%
+  group_by(GAME_ID) %>%
+  summarise( points_per_game = n())
+
+player_1_ppg_42_mean <- mean(player_1_ppg_42$points_per_game)
+player_2_ppg_42_mean <- mean(player_2_ppg_42$points_per_game)
+
+noquote(paste(players_42[1], ' has got an average of ', player_1_ppg_42_mean, ' points per game' ))
+noquote(paste(players_42[2], ' has got an average of ', player_2_ppg_42_mean, ' points per game' ))
+
+t_test_42 <- t.test(player_1_ppg_42$points_per_game, player_2_ppg_42$points_per_game)
+
+noquote(paste('The p-value obtained from the t-test is: ', t_test_42$p.value))
+
+
+if (t_test_42$p.value > alpha_42) {
+noquote('We RETAIN the null hypothesis that both players have a similar performance.')
+} else {
+noquote('We REJECT the null hypothesis that both players have a similar performance')
+}
+```
+
+
+
+# 3. Inferential analysis using player's quantitative metrics
+
+
+
+## ANOVA test to investigate effect on Game Period
+
+
+The Null Hypothesis is that the Game Period does not affect in the shot clock.
+
+```{r echo=FALSE, fig.height=4, fig.width=8, message=FALSE, warning=FALSE}
+
+options(width = 60)
+
+alpha_43 <- 0.05
+nba_sample_43 <- nba_df[sample(nrow(nba_df), 100), replace = FALSE] %>% filter(!is.na(PERIOD)) %>% select(PERIOD, SHOT_CLOCK) %>% drop_na(PERIOD)
+nba_sample_43$PERIOD <- factor(nba_sample_43$PERIOD)
+
+
+anova_43 <- aov(SHOT_CLOCK ~ PERIOD, data = nba_sample_43)
+
+
+levene_43 <- leveneTest(SHOT_CLOCK ~ PERIOD, data = nba_sample_43)
+levene_43_pval <- levene_43$Pr[1]
+
+if (levene_43_pval > alpha_43) {
+levene_43_outcome <- 'the groups have a similar variance.'
+levene_43_bool <- TRUE
+} else {
+levene_43_outcome <- 'the variance between the groups is significant.'
+levene_43_bool <- FALSE
+}
+
+noquote(paste('After performing a Lavene test, the p-value was : ', levene_43$Pr[1]))
+noquote('therefore ')
+levene_43_outcome
+
+
+
+shapiro_43 <- shapiro.test(anova_43$residuals)
+
+if (shapiro_43$p.value > alpha_43) {
+shapiro_43_outcome <- 'The residuals are normally distributed.'
+shapiro_43_bool <- TRUE
+
+} else {
+shapiro_43_outcome <- 'The residuals are not normally distributed.'
+shapiro_43_bool <- FALSE
+}
+
+
+noquote(paste('After performing a Shapiro test, the p-value was :', shapiro_43$p.value))
+noquote('therefore ')
+shapiro_43_outcome
+
+
+
+#aov_43_pval <- anova_43$coefficients[5]
+aov_43_pval <- summary(anova_43)[[1]][["Pr(>F)"]]
+
+if (aov_43_pval[1] > alpha_43) {
+aov_43_outcome <- 'the Game Period does not have an effect in the shot clock.'
+  
+} else {
+aov_43_outcome <- 'the Game Period does affect the shot clock.'
+  
+}
+
+```
+We retain the Null Hypothesis when the p-value obtained from the Anova analysis is larger than 0.05:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Conclusion on whether to perform an ANOVA test, if Shapiro and Levene are positive
+
+if (shapiro_43_bool & levene_43_bool) {
+
+cat(paste('From the Anova analysis, the p-value was :', aov_43_pval[1]), sep = '\n')
+aov_43_outcome
+
+
+} else {
+noquote('As per the above analisys, the data is not suitable for a reliable ANOVA test.')
+}
+
+```
+
+```{r echo=FALSE, fig.height=4, fig.width=8, message=FALSE, warning=FALSE}
+ggboxplot(nba_sample_43, x = "PERIOD", y = "SHOT_CLOCK", 
+          color = "PERIOD", palette = c("#00AFBB", "#E7B800", "#FC4E07", "#BB0C00"),
+          order = c("1", "2", "3", "4"),
+          ylab = "SHOT_CLOCK", xlab = "PERIOD",
+          add = c("mean_se"))
+```
+
+
+
+## Correlation between number of dribbles and shot clock
+
+We would like to study a numerical parameter and it's correlation with another one.
+Let's explore the relationship between dribbles and shot clock. One would expect that a player's performance would be conditioned with the amount of time he's got available before shooting.
+
+
+We are now exploring whether there could be a relationship between two parameters: The average number of dribbles and the average shot clock, for each player, as a reference statistic of performance.
+For each player, we would like to see whether these parameters are correlated using the Pearson's product moment correlation. Our sample will contain one entry per player (mean statistic) and therefore considers the whole dataset.
+
+During the calculation, we will replace the missing values with the mean of the remaining sample.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# Replacing missing values with the mean
+nba_df$DRIBBLES[is.na(nba_df$DRIBBLES)] <- mean(nba_df$DRIBBLES, na.rm = TRUE)
+nba_df$SHOT_CLOCK[is.na(nba_df$SHOT_CLOCK)] <- mean(nba_df$SHOT_CLOCK, na.rm = TRUE)
+
+player_d_vs_sc <- nba_df %>%
+  group_by(PLAYER_NAME) %>%
+  summarise( avg_dribbles = mean(DRIBBLES), avg_shot_clock = mean(SHOT_CLOCK))
+
+coefficient_41 <- cor.test(player_d_vs_sc$avg_dribbles, player_d_vs_sc$avg_shot_clock)
+
+noquote('We compare the Average number of dribbles')
+noquote('and the Average shot clock for each player')
+noquote(paste('The result obtained is: ', coefficient_41$estimate))
+
+```
+
+As the correlation parameter is close to zero, we conclude that these two parameters are not correlated and therefore have little interest in inferential analysis.
+
+
+
+
+
+## Correlation between accuracy and shot distance
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+players_avg_stats <- nba_df %>%
+  group_by(PLAYER_NAME) %>%
+  summarize(avg_shot_dist = mean(SHOT_DIST), avg_close_def_dist = mean(CLOSE_DEF_DIST))
+
+# To ensure the data is normally distributed, as dicussed on Test 2, we select accuracy values
+# below the third quartile in order to build the model
+
+players_regression_dataset <- players_accuracy %>%
+  filter(accuracy < third_quartile) %>%
+  inner_join(players_avg_stats) 
+# The inner join discards players whose accuracy is below third quartile
+
+
+coefficient_42 <- cor.test(players_regression_dataset$accuracy, players_regression_dataset$avg_shot_dist)
+
+noquote('We compare each player\'s accuracy with ')
+noquote('his corresponding average shot distance.')
+noquote(paste('The result obtained is: ', coefficient_42$estimate))
+
+```
+
+
+As the obtained result differs from zero, we conclude that these parameters are sufficiently correlated to attempt to build a regression model. The negative results indicates that the less the distance the more the accuracy, as we may intuitively expect.
+
+
+As discussed on Test 2, to build the model we are only selecting players below the third quartile to ensure we are working with a normally distributed population.
+
+
+## Prediction model based and average shot distance
+
+We build two lineal regression models:
+## asd_model_1 compares the average shot distance with his corresponding player's accuracy
+## asd_model_2 compares the average closest defender distance with his corresponding player's accuracy
+
+```{r echo=FALSE, fig.height=5, fig.width=8, message=FALSE, warning=FALSE}
+
+asd_model_1 <- lm(accuracy ~ avg_shot_dist, data = players_regression_dataset)
+
+noquote('asd_model_1')
+#summary(asd_model_1)
+
+x_41 <- players_regression_dataset$avg_shot_dist
+y_41 <- players_regression_dataset$accuracy
+
+
+par(mfrow=c(1,2))
+options(repr.plot.width=6, repr.plot.height=6)
+
+plot(x_41, y_41, pch=19, col='blue', xlab='Average shot distance', ylab='Accuracy', cex=1.1, lwd=2)
+icept <- asd_model_1$coefficients[1]
+slope <- asd_model_1$coefficients[2]
+points(x_41, asd_model_1$fitted.values, pch=19, col='orange')
+abline(a=icept, b=slope, lwd=2, col='red')
+
+
+
+# MODEL 2
+
+asd_model_2 <- lm(accuracy ~ avg_close_def_dist, data = players_regression_dataset)
+noquote('asd_model_2')
+#summary(asd_model_2)
+
+
+x_41_2 <- players_regression_dataset$avg_close_def_dist
+y_41_2 <- players_regression_dataset$accuracy
+
+options(repr.plot.width=6, repr.plot.height=6)
+
+plot(x_41_2, y_41_2, pch=19, col='green', xlab='Average close def distance', ylab='Accuracy', cex=1.1, lwd=2)
+icept_2 <- asd_model_2$coefficients[1]
+slope_2 <- asd_model_2$coefficients[2]
+points(x_41_2, asd_model_2$fitted.values, pch=19, col='orange')
+abline(a=icept_2, b=slope_2, lwd=2, col='red')
+
+
+
+```
+
+Model 1 analysis
+
+```{r echo=FALSE}
+noquote('RSE Model 1:')
+sigma(asd_model_1)
+
+noquote('RSE Model 1 vs mean accuracy:')
+sigma(asd_model_1)/mean(players_regression_dataset$accuracy)
+
+noquote(paste('R-squared model 1: ',summary(asd_model_1)$r.squared))
+
+```
+
+Model 2 analysis
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+noquote('RSE Model 2:')
+sigma(asd_model_2)
+
+noquote('RSE Model 2 vs mean accuracy:')
+sigma(asd_model_2)/mean(players_regression_dataset$accuracy)
+
+noquote(paste('R-squared model 2: ',summary(asd_model_2)$r.squared))
+
+```
+
+The R-squared value indicates de variation in accuracy explained by either average shot distance or average closest defender distance.
+
+As the R-squared value is higher in model 1, we retain this model. The variation in the response parameter is more influenced (explained) by the input variable in this model.
+
+
+
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+
+options(repr.plot.width=12, repr.plot.height=10)
+par(mfrow = c(2, 2))
+plot(asd_model_1)
+
+
+# Plot residuals
+options(repr.plot.width=12, repr.plot.height=6) # TO PREPARE THE PLOT
+par(mfrow=c(1,2))
+
+# RESIDUALS
+plot(x_41, asd_model_1$residuals, pch=19, col='red', cex=1.2, main='Residuals')
+abline(h=0, lwd=1, col='black')
+
+# RESIDUALS VS FITTED
+plot(asd_model_1$fitted, asd_model_1$residuals, pch=19, col='red', cex=1.2, main='Residuals vs Fitted')
+abline(h=0, lwd=1, col='black')
+
+```
+
+
+## Visualize the residuals
+
+As the residuals are the difference between the value of an outcome variable predicted by the model and the actual observed value of the variable, we need to make predictions and then testing to measure the offset.
+To test our model, we re-build it but this time splitting the dataset between train and test subsets.
+A common practice is to use 60% for train then 40% for test so we will use this criteria.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+data_sample <- sample(c(TRUE, FALSE), replace = TRUE, nrow(players_regression_dataset), prob = c(0.6,0.4))
+
+# subset data points into train and test sets
+train <- players_regression_dataset[data_sample, ]
+test <- players_regression_dataset[!data_sample, ]
+
+# rebuild the model with train data only
+model_asd_12 <- lm(accuracy ~ avg_shot_dist, data=train)
+
+noquote('We retrain the model splitting the data 60-40 for train and test' )
+
+avg_rse_12 <- sigma(model_asd_12)/mean(train$accuracy)
+noquote(paste('The average RSE: ', avg_rse_12))
+
+r_sq_12 <- summary(model_asd_12)$r.squared
+noquote(paste('The R-Squared value: ', r_sq_12))
+
+```
+
+
+We are now checking the model residuals using the prediction structure.
+The geom_segment ggplot feature stresses the value of the points depending of the magnitud of the offset. So the most offender deviants are highlighted in the graph.
+
+```{r fig.height=3, fig.width=7, message=FALSE, warning=FALSE}
+
+train$estimate <- predict(model_asd_12)
+train$residuals <- residuals(model_asd_12)
+
+plot0 <- players_regression_dataset %>%
+  ggplot(aes(avg_shot_dist, accuracy)) + geom_point()
+
+#plot0
+
+plot <- train %>%
+  ggplot(aes(avg_shot_dist, accuracy)) + geom_point(aes(size = abs(residuals)) )+ geom_point(aes(y=estimate), color='blue') + geom_segment(aes(xend=avg_shot_dist, yend=estimate), color='gray')
+
+plot
+
+```
+
+```{r eval=FALSE, include=FALSE}
+
+# Model fit - decided not to output finally
+
+plot_2 <- ggplot(train, aes(avg_shot_dist, accuracy)) +
+geom_point() + geom_smooth(method = 'lm') + geom_smooth(se=FALSE, color='red')
+
+plot_2
+
+```
+
+## Interpretation
+
+Here we are making the assumption that the shot distance is the only variable that influences one player's accuracy. As discussed during the introduction, we are making this assumption for didactical purposes and this doesn't reflect the actual basketball gameplay.
+
+We are looking at the intercept coefficient, which is only interpretable if we can reasonably expect a zero value for all independent variables in a model. A "zero" distance in basketball is a difficult concept to analyze as the gameplay is completely different and there are other variables with heavier influence that would impact the accuracy, and we are not considering those in this model.
+
+```{r}
+intercept_coefficient <- model_asd_12$coefficients[2]
+```
+According to the simple regression analysis of Player Accuracy by Average Shot Distance, we estimate that for every additional foot, the player accuracy decreases by:
+
+```{r}
+intercept_coefficient
+
+```
+
+## MSE and predictions
+
+As the MSE measures the average squared difference between predicted and observed values, we are calculating this value using a summarise dplyr function feeding the split dataset "test" (40% sampled rows from the original player's accuracy dataset ). This MSE will be plotted to verify to visualize the prediction.
+
+```{r fig.height=3, fig.width=7, message=FALSE, warning=FALSE}
+
+mse <- test %>%
+  add_predictions(model_asd_12) %>%
+  summarise(MSE = mean((accuracy-pred)^2))
+
+plot_3 <- test %>%
+  add_predictions(model_asd_12) %>%
+  ggplot(aes(avg_shot_dist, accuracy)) + geom_point() + geom_point(aes(y=pred), color='blue')
+
+plot_3
+
+
+```
+
+
+
+
+# Conclusions
+
+The main conclusions from this analysis are that the majority of players have a similar performance with the exception of some outstanding players whose accurary is above the rest.
+
+From the players comparison tests, during the test performing it was found that players have a similar performance and the home/away effect is not significant.
+
+The average shot distance has shown to be linked to the empirical probability of the players for being successful making a shot.
+
+
+# References
+
+Some consulting materials used for this work can be found below.
+See for example [@IMS] and [@RLD].
+
